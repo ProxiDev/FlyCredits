@@ -13,6 +13,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
@@ -236,6 +237,16 @@ public class FlyCredits extends JavaPlugin implements Listener {
             stmt.execute();
         }catch (Exception e){
             e.printStackTrace();
+        }
+    }
+
+    @EventHandler
+    public void onPlayerChangedWorldEvent(PlayerChangedWorldEvent e){
+        Player p = e.getPlayer();
+        if (watchedPlayers.containsKey(p.getUniqueId())){
+            if (!watchedPlayers.get(p.getUniqueId()).containsKey(p.getWorld().getName().toLowerCase()) || (watchedPlayers.get(p.getUniqueId()).containsKey(p.getWorld().getName().toLowerCase()) && watchedPlayers.get(p.getUniqueId()).get(p.getWorld().getName().toLowerCase()) <= 0)){
+                getServer().dispatchCommand(getServer().getConsoleSender(), "fly "+p.getName()+" disable");
+            }
         }
     }
 
