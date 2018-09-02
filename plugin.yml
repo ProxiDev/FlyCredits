@@ -3,6 +3,8 @@ version: 0.1
 author: LadyProxima
 main: me.ladyproxima.flycredits.FlyCredits
 api-version: 1.12.2
+depend:
+- Vault
 commands:
   fc:
     description: Give users time to fly.
