@@ -1,0 +1,20 @@
+name: FlyCredits
+version: 0.1
+author: LadyProxima
+main: me.ladyproxima.flycredits.FlyCredits
+api-version: 1.12.2
+commands:
+  fc:
+    description: Give users time to fly.
+    usage: |
+      /fc add <user> <duration> <world>
+      /fc remove <user> <duration> <world>
+      /fc check [<user>]
+
+permissions:
+  flycredits.use:
+    description: Allows addition and removal of FlyCredits.
+    default: op
+  flycredits.check:
+    description: Allows fc check command.
+    default: op
