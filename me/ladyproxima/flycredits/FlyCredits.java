@@ -147,9 +147,10 @@ public class FlyCredits extends JavaPlugin implements Listener {
             Player p = getServer().getPlayer(args[1]);
             try{
                 if (p.isOnline()){
-                    sendNice((Player)sender,"Zeit erfolgreich hinzugefügt.");
+
                     Duration t = Duration.parse("pt"+args[2]);
                     addTime(p, t.getSeconds(), args[3].toLowerCase());
+                    sendNice((Player)sender,"Zeit erfolgreich hinzugefügt.");
 
                 }
 
