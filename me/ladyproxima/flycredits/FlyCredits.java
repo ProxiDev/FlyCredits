@@ -37,7 +37,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         logger = getLogger();
-        logger.info("Enabling FlyCredits!");
+        logger.info("Enabling FlyCredits...");
 
         setupConfig();
 
@@ -52,7 +52,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
 
         loadFlyCredits();
 
-        logger.info("Loaded FlyCredits!");
+        logger.info("Enabled FlyCredits!");
     }
 
     @Override
@@ -388,6 +388,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
                     watchedPlayers.put(uuid, hm);
                 }
             }
+            logger.info("Loaded FlyCredits from Database!");
 
 
         } catch (Exception e) {
