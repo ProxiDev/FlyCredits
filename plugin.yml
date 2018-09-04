@@ -9,6 +9,7 @@ commands:
   fc:
     description: Give users time to fly.
     usage: |
+      Usage:
       /fc add <user> <duration> <world>
       /fc remove <user> <duration> <world>
       /fc check [<user>]
