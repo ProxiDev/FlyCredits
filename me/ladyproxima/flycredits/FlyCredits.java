@@ -81,6 +81,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        logger.info("Disabled!");
     }
 
     @Override
