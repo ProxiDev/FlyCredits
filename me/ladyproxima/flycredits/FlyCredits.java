@@ -4,6 +4,7 @@ import net.milkbowl.vault.permission.Permission;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -30,6 +31,12 @@ public class FlyCredits extends JavaPlugin implements Listener {
     FileConfiguration config = getConfig();
     Permission perms = null;
 
+    String NAME_COLOR = "";
+    String MESSAGE_COLOR = "";
+    String WORLD_COLOR = "";
+    String TIME_COLOR = "";
+
+
     Logger logger;
 
     Connection connection;
@@ -39,7 +46,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
         logger = getLogger();
         logger.info("Enabling FlyCredits...");
 
-        setupConfig();
+        setupConfigVariables();
 
         RegisteredServiceProvider<Permission> rsp = getServer().getServicesManager().getRegistration(Permission.class);
         perms = rsp.getProvider();
@@ -63,12 +70,10 @@ public class FlyCredits extends JavaPlugin implements Listener {
                     UUID uuid = uuidHashMapEntry.getKey();
                     String world = stringIntegerEntry.getKey();
                     int timeLeft = stringIntegerEntry.getValue();
-                    PreparedStatement stmt = connection.prepareStatement("update FlyCredits set timeleft = ? where uuid = ? and world = ?;");
-                    stmt.setInt(1, timeLeft);
-                    stmt.setString(2, uuid.toString());
-                    stmt.setString(3, world);
-                    stmt.execute();
-                    Bukkit.getScheduler().cancelTask(playerTaskMap.get(uuid).get(world));
+                    updateDB(timeLeft, uuid.toString(), world);
+                    if (playerTaskMap.containsKey(uuid) && playerTaskMap.get(uuid).containsKey(world)) {
+                        Bukkit.getScheduler().cancelTask(playerTaskMap.get(uuid).get(world));
+                    }
                 }
             }
 
@@ -90,7 +95,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
         if (sender == Bukkit.getConsoleSender()) {
             permLevel = 10;
         } else {
-            Player test = (Player) sender;
+            Player test = getServer().getPlayer(sender.getName());
             if (perms.has(test, "flycredits.check")) permLevel = 1;
             if (perms.has(test, "flycredits.use")) permLevel = 2;
         }
@@ -108,76 +113,76 @@ public class FlyCredits extends JavaPlugin implements Listener {
                 return true;
             }
 
-            Player p = getServer().getPlayer(args[1]);
+            OfflinePlayer target = getServer().getOfflinePlayer(args[1]);
+
             try {
-                if (p.isOnline()) {
-
-                    Duration t = Duration.parse("pt" + args[2]);
-                    addTime(p, (int) t.getSeconds(), args[3].toLowerCase());
-                    sendNice((Player) sender, "Zeit erfolgreich hinzugefügt.");
-
-                }
+                Duration t = Duration.parse("pt" + args[2].replaceAll("-", ""));
+                int addSeconds = (int) t.getSeconds();
+                addTime(target, args[3].toLowerCase(), addSeconds);
+                sendNice(sender, "Spieler " + NAME_COLOR + target.getName() + MESSAGE_COLOR + " erfolgreich " +
+                        TIME_COLOR + secToTime(addSeconds) + MESSAGE_COLOR + " in Welt " + WORLD_COLOR + args[3].toLowerCase() + MESSAGE_COLOR +
+                        " hinzugefügt. Neue Flugzeit: " + TIME_COLOR + secToTime(watchedPlayers.get(target.getUniqueId()).get(args[3].toLowerCase())) + MESSAGE_COLOR + ".");
 
             } catch (NullPointerException e) {
-                sendNice((Player) sender, "Spieler nicht online.");
+                sendNice(sender, "Spieler war noch nie auf dem Server.");
 
             } catch (Exception e) {
-                sendNice((Player) sender, "Bitte Zeitformat einhalten, z.B.: 12h50m20s.");
+                sendNice(sender, "Bitte Zeitformat einhalten, z.B.: " + TIME_COLOR + "12h50m20s" + MESSAGE_COLOR + ".");
             }
 
-        } /*else if (args.length > 0 && args[0].toLowerCase().equals("get")){
-            if(permlevel <2){
-                sender.sendMessage(getConfigMessage("no_permission_message"));
-                return true;
-            }
-            for (Map.Entry<UUID, HashMap<String, Integer>> uuidFlyInformationEntry : watchedPlayers.entrySet()) {
-                sendNice((Player)sender,uuidFlyInformationEntry.getKey().toString());
-                for (Map.Entry<String, Integer> stringFlyTimeEntry : uuidFlyInformationEntry.getValue().entrySet()) {
-                    sendNice((Player)sender,stringFlyTimeEntry.getKey());
-                    sendNice((Player)sender,"timeleft: "+stringFlyTimeEntry.getValue());
-
-                }
-                sender.sendMessage("");
-            }
-        }*/ else if (args.length == 4 && subcommand.equals("remove")) {
+        } else if (args.length == 4 && subcommand.equals("remove")) {
             if (permLevel < 2) {
                 sender.sendMessage(getConfigMessage("no_permission_message"));
                 return true;
             }
-            Player p = getServer().getPlayer(args[1]);
+            OfflinePlayer target = getServer().getOfflinePlayer(args[1]);
             try {
-                if (p.isOnline()) {
 
-                    Duration t = Duration.parse("pt" + args[2]);
-                    removeTime(p.getUniqueId(), args[3].toLowerCase(), (int) t.getSeconds());
-                    sendNice((Player) sender, "Zeit erfolgreich entfernt.");
-
-                }
+                Duration t = Duration.parse("pt" + args[2].replaceAll("-", ""));
+                int addSeconds = (int) t.getSeconds();
+                removeTime(target.getUniqueId(), args[3].toLowerCase(), addSeconds);
+                int newTime = watchedPlayers.get(target.getUniqueId()).containsKey(args[3].toLowerCase()) ? watchedPlayers.get(target.getUniqueId()).get(args[3].toLowerCase()) : 0;
+                sendNice(sender, "Neue Flugzeit für Spieler " + NAME_COLOR + target.getName() + MESSAGE_COLOR + " in Welt " + WORLD_COLOR + args[3].toLowerCase() + MESSAGE_COLOR + ": " + TIME_COLOR + secToTime(newTime) + MESSAGE_COLOR + ".");
 
             } catch (NullPointerException e) {
-                sendNice((Player) sender, "Spieler nicht online.");
+                sendNice(sender, "Spieler war noch nie auf dem Server.");
 
             } catch (Exception e) {
-                sendNice((Player) sender, "Bitte Zeitformat einhalten, z.B.: 12h50m20s.");
+                sendNice(sender, "Bitte Zeitformat einhalten, z.B.: " + TIME_COLOR + "12h50m20s" + MESSAGE_COLOR + ".");
             }
         } else if (args.length > 0 && subcommand.equals("check")) {
             if (permLevel < 1) {
                 sender.sendMessage(getConfigMessage("no_permission_message"));
                 return true;
             }
-            Player p;
+            OfflinePlayer target;
             if (args.length > 1) {
-                p = getServer().getPlayer(args[1]);
+                target = getServer().getOfflinePlayer(args[1]);
+
             } else {
-                p = (Player) sender;
+                target = (Player) sender;
             }
 
-            if (watchedPlayers.containsKey(p.getUniqueId())) {
-                for (Map.Entry<String, Integer> duration : watchedPlayers.get(p.getUniqueId()).entrySet()) {
-                    sendNice((Player) sender, "Verbleibende Zeit in Welt " + duration.getKey() + ": " + duration.getValue() + " Sekunden.");
+            if (watchedPlayers.containsKey(target.getUniqueId())) {
+                for (Map.Entry<String, Integer> worldTimeLeftMap : watchedPlayers.get(target.getUniqueId()).entrySet()) {
+                    sendNice(sender, "Verbleibende Zeit in Welt " + WORLD_COLOR + worldTimeLeftMap.getKey() + MESSAGE_COLOR + ": " + TIME_COLOR + secToTime(worldTimeLeftMap.getValue()) + MESSAGE_COLOR + ".");
                 }
             } else {
-                sendNice((Player) sender, "Keine verbleibende Flugzeit mehr.");
+                sendNice(sender, "Keine verbleibende Flugzeit mehr.");
+            }
+
+        } else if (args.length > 0 && args[0].toLowerCase().equals("checkall")) {
+            if (permLevel < 2) {
+                sender.sendMessage(getConfigMessage("no_permission_message"));
+                return true;
+            }
+            for (Map.Entry<UUID, HashMap<String, Integer>> uuidFlyInformationEntry : watchedPlayers.entrySet()) {
+                sender.sendMessage("");
+                OfflinePlayer target = getServer().getOfflinePlayer(uuidFlyInformationEntry.getKey());
+                sendNice(sender, NAME_COLOR + target.getName() + MESSAGE_COLOR + ":");
+                for (Map.Entry<String, Integer> stringFlyTimeEntry : uuidFlyInformationEntry.getValue().entrySet()) {
+                    sendNice(sender, "Verbleibende Zeit in Welt " + WORLD_COLOR + stringFlyTimeEntry.getKey() + MESSAGE_COLOR + ": " + TIME_COLOR + secToTime(stringFlyTimeEntry.getValue()) + MESSAGE_COLOR + ".");
+                }
             }
         } else {
 
@@ -274,7 +279,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
         playerTaskMap.put(uuid, hm);
     }
 
-    public void addTime(Player p, int sec, String world) {
+    public void addTime(OfflinePlayer p, String world, int sec) throws NullPointerException {
         UUID uuid = p.getUniqueId();
         if (!watchedPlayers.containsKey(uuid)) {
 
@@ -295,8 +300,11 @@ public class FlyCredits extends JavaPlugin implements Listener {
         }
 
         //added time, so player will certainly some time left - giving permission
-        perms.playerAdd(p.getWorld(), p.getName(), "essentials.fly");
-        startTimer(p.getUniqueId(), world);
+        perms.playerAdd(getServer().getWorld(world), p.getName(), "essentials.fly");
+
+        if (p.isOnline()) {
+            startTimer(p.getUniqueId(), world);
+        }
     }
 
     public void removeTime(UUID uuid, String world, int sec) {
@@ -354,14 +362,12 @@ public class FlyCredits extends JavaPlugin implements Listener {
         }
     }
 
-    public void setupConfig() {
-        config.addDefault("username", "DB_user");
-        config.addDefault("password", "DB_password");
-        config.addDefault("url", "DB_url (e.g. localhost:3306/DataBaseName)");
-        config.addDefault("no_permission_message", "'&cDu hast dazu keine Berechtigungen.'");
-        config.addDefault("prefix", "'&f[&6FlyCredits&f]&b '");
-        config.options().copyDefaults(true);
-        saveConfig();
+    public void setupConfigVariables() {
+        saveDefaultConfig();
+        TIME_COLOR = getConfigMessage("time_color");
+        NAME_COLOR = getConfigMessage("name_color");
+        WORLD_COLOR = getConfigMessage("world_color");
+        MESSAGE_COLOR = getConfigMessage("message_color");
     }
 
     public void loadFlyCredits() {
@@ -409,9 +415,42 @@ public class FlyCredits extends JavaPlugin implements Listener {
         int timeLeft;
     }
 
-    public void sendNice(Player target, String message) {
-        target.sendMessage(getConfigMessage("prefix") + message);
+    public String secToTime(int seconds) {
+
+        final int MINUTES_IN_AN_HOUR = 60;
+        final int SECONDS_IN_A_MINUTE = 60;
+
+        int minutes = seconds / SECONDS_IN_A_MINUTE;
+        seconds -= minutes * SECONDS_IN_A_MINUTE;
+
+        int hours = minutes / MINUTES_IN_AN_HOUR;
+        minutes -= hours * MINUTES_IN_AN_HOUR;
+
+        StringBuilder sb = new StringBuilder();
+        if (hours > 0) {
+            sb.append(hours + "h ");
+        }
+        if (minutes > 0) {
+            sb.append(minutes + "m ");
+        }
+        sb.append(seconds + "sec");
+
+        return sb.toString();
     }
+
+    public void sendNice(Player target, String message) {
+        target.sendMessage(getConfigMessage("prefix") + getConfigMessage("message_color") + message);
+    }
+
+    public void sendNice(CommandSender target, String message) {
+        if (target == Bukkit.getConsoleSender()) {
+            logger.info(message.replaceAll("§.{1}", ""));
+        } else {
+            target.sendMessage(getConfigMessage("prefix") + getConfigMessage("message_color") + message);
+        }
+
+    }
+
 
     public String getConfigMessage(String conf) {
         return ChatColor.translateAlternateColorCodes('&', config.getString(conf));

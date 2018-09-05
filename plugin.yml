@@ -1,5 +1,5 @@
 name: FlyCredits
-version: 0.3
+version: 0.4
 author: LadyProxima
 main: me.ladyproxima.flycredits.FlyCredits
 api-version: 1.12.2
@@ -13,6 +13,7 @@ commands:
       /fc add <user> <duration> <world>
       /fc remove <user> <duration> <world>
       /fc check [<user>]
+      /fc checkall
 
 permissions:
   flycredits.use:
