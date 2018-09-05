@@ -1,0 +1,9 @@
+username: DB_user
+password: DB_password
+url: DB_url (e.g. localhost:3306/DataBaseName)
+no_permission_message: '&cDu hast dazu keine Berechtigungen.'
+prefix: '&f[&6FlyCredits&f] '
+message_color: '&b'
+name_color: '&3'
+world_color: '&9'
+time_color: '&a'
