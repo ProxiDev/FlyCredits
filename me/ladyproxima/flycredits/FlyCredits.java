@@ -101,7 +101,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
         }
 
         if (permLevel < 1) {
-            sender.sendMessage(getConfigMessage("no_permission_message"));
+            sender.sendMessage(getConfigStringColored("no_permission_message"));
             return true;
         }
 
@@ -109,7 +109,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
 
         if (args.length == 4 && subcommand.equals("add")) {
             if (permLevel < 2) {
-                sender.sendMessage(getConfigMessage("no_permission_message"));
+                sender.sendMessage(getConfigStringColored("no_permission_message"));
                 return true;
             }
 
@@ -132,7 +132,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
 
         } else if (args.length == 4 && subcommand.equals("remove")) {
             if (permLevel < 2) {
-                sender.sendMessage(getConfigMessage("no_permission_message"));
+                sender.sendMessage(getConfigStringColored("no_permission_message"));
                 return true;
             }
             OfflinePlayer target = getServer().getOfflinePlayer(args[1]);
@@ -152,15 +152,18 @@ public class FlyCredits extends JavaPlugin implements Listener {
             }
         } else if (args.length > 0 && subcommand.equals("check")) {
             if (permLevel < 1) {
-                sender.sendMessage(getConfigMessage("no_permission_message"));
+                sender.sendMessage(getConfigStringColored("no_permission_message"));
                 return true;
             }
             OfflinePlayer target;
             if (args.length > 1) {
                 target = getServer().getOfflinePlayer(args[1]);
 
-            } else {
+            } else if (sender instanceof Player){
                 target = (Player) sender;
+            } else {
+                sendNice(sender, "Für diesen Befehl musst du ein Spieler sein.");
+                return true;
             }
 
             if (watchedPlayers.containsKey(target.getUniqueId())) {
@@ -173,7 +176,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
 
         } else if (args.length > 0 && args[0].toLowerCase().equals("checkall")) {
             if (permLevel < 2) {
-                sender.sendMessage(getConfigMessage("no_permission_message"));
+                sender.sendMessage(getConfigStringColored("no_permission_message"));
                 return true;
             }
             for (Map.Entry<UUID, HashMap<String, Integer>> uuidFlyInformationEntry : watchedPlayers.entrySet()) {
@@ -247,7 +250,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
                     if (watchedPlayers.get(uuid).get(pWorld) <= 0) {
                         //Player has no more flytime left, so:
                         watchedPlayers.get(uuid).put(world, 0);
-                        perms.playerRemove(p.getWorld(), p.getName(), "essentials.fly"); //removing permissions
+                        perms.playerRemove(world, getServer().getOfflinePlayer(uuid), "essentials.fly"); //removing permissions
                         p.setFlying(false); //disabling flight
                         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "fly " + p.getName() + " disable"); //disabling /fly
                         sendNice(p, "Flugzeit abgelaufen!");
@@ -300,7 +303,7 @@ public class FlyCredits extends JavaPlugin implements Listener {
         }
 
         //added time, so player will certainly some time left - giving permission
-        perms.playerAdd(getServer().getWorld(world), p.getName(), "essentials.fly");
+        perms.playerAdd(world, p, "essentials.fly");
 
         if (p.isOnline()) {
             startTimer(p.getUniqueId(), world);
@@ -364,10 +367,10 @@ public class FlyCredits extends JavaPlugin implements Listener {
 
     public void setupConfigVariables() {
         saveDefaultConfig();
-        TIME_COLOR = getConfigMessage("time_color");
-        NAME_COLOR = getConfigMessage("name_color");
-        WORLD_COLOR = getConfigMessage("world_color");
-        MESSAGE_COLOR = getConfigMessage("message_color");
+        TIME_COLOR = getConfigStringColored("time_color");
+        NAME_COLOR = getConfigStringColored("name_color");
+        WORLD_COLOR = getConfigStringColored("world_color");
+        MESSAGE_COLOR = getConfigStringColored("message_color");
     }
 
     public void loadFlyCredits() {
@@ -439,20 +442,20 @@ public class FlyCredits extends JavaPlugin implements Listener {
     }
 
     public void sendNice(Player target, String message) {
-        target.sendMessage(getConfigMessage("prefix") + getConfigMessage("message_color") + message);
+        target.sendMessage(getConfigStringColored("prefix") + getConfigStringColored("message_color") + message);
     }
 
     public void sendNice(CommandSender target, String message) {
         if (target == Bukkit.getConsoleSender()) {
             logger.info(message.replaceAll("§.{1}", ""));
         } else {
-            target.sendMessage(getConfigMessage("prefix") + getConfigMessage("message_color") + message);
+            target.sendMessage(getConfigStringColored("prefix") + getConfigStringColored("message_color") + message);
         }
 
     }
 
 
-    public String getConfigMessage(String conf) {
+    public String getConfigStringColored(String conf) {
         return ChatColor.translateAlternateColorCodes('&', config.getString(conf));
     }
 
