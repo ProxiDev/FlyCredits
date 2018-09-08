@@ -6,7 +6,9 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,6 +16,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerToggleFlightEvent;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -22,11 +25,16 @@ import java.time.Duration;
 import java.util.*;
 import java.util.logging.Logger;
 
-public class FlyCredits extends JavaPlugin implements Listener {
+public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor {
 
 
     HashMap<UUID, HashMap<String, Integer>> watchedPlayers = new HashMap<>();
-    HashMap<UUID, HashMap<String, Integer>> playerTaskMap = new HashMap<>();
+    ArrayList<UUID> activePlayers = new ArrayList<>();
+
+    int timerID;
+
+    ArrayList<String> checkCommands;
+    ArrayList<String> useCommands;
 
     FileConfiguration config = getConfig();
     Permission perms = null;
@@ -35,7 +43,6 @@ public class FlyCredits extends JavaPlugin implements Listener {
     String MESSAGE_COLOR = "";
     String WORLD_COLOR = "";
     String TIME_COLOR = "";
-
 
     Logger logger;
 
@@ -54,10 +61,20 @@ public class FlyCredits extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(this, this);
         getCommand("fc").setExecutor(this);
 
+        checkCommands = new ArrayList<>();
+        checkCommands.add("check");
+
+        useCommands = new ArrayList<>();
+        useCommands.add("add");
+        useCommands.add("remove");
+        useCommands.add("checkall");
+
         //Setting up the DB
         setupDB();
 
         loadFlyCredits();
+
+        timerID = startTimer();
 
         logger.info("Enabled FlyCredits!");
     }
@@ -71,14 +88,11 @@ public class FlyCredits extends JavaPlugin implements Listener {
                     String world = stringIntegerEntry.getKey();
                     int timeLeft = stringIntegerEntry.getValue();
                     updateDB(timeLeft, uuid.toString(), world);
-                    if (playerTaskMap.containsKey(uuid) && playerTaskMap.get(uuid).containsKey(world)) {
-                        Bukkit.getScheduler().cancelTask(playerTaskMap.get(uuid).get(world));
-                    }
                 }
             }
 
             watchedPlayers.clear();
-            playerTaskMap.clear();
+            Bukkit.getScheduler().cancelTask(timerID);
 
             if (connection != null && !connection.isClosed()) {
                 connection.close();
@@ -91,28 +105,14 @@ public class FlyCredits extends JavaPlugin implements Listener {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        int permLevel = 0;
-        if (sender == Bukkit.getConsoleSender()) {
-            permLevel = 10;
-        } else {
-            Player test = getServer().getPlayer(sender.getName());
-            if (perms.has(test, "flycredits.check")) permLevel = 1;
-            if (perms.has(test, "flycredits.use")) permLevel = 2;
-        }
+        String subcommand = args.length > 0 ? args[0].toLowerCase() : "";
 
-        if (permLevel < 1) {
+        if (!sufficientPermissions(subcommand, sender)){
             sender.sendMessage(getConfigStringColored("no_permission_message"));
             return true;
         }
 
-        String subcommand = args.length > 0 ? args[0].toLowerCase() : "";
-
         if (args.length == 4 && subcommand.equals("add")) {
-            if (permLevel < 2) {
-                sender.sendMessage(getConfigStringColored("no_permission_message"));
-                return true;
-            }
-
             OfflinePlayer target = getServer().getOfflinePlayer(args[1]);
 
             try {
@@ -131,10 +131,6 @@ public class FlyCredits extends JavaPlugin implements Listener {
             }
 
         } else if (args.length == 4 && subcommand.equals("remove")) {
-            if (permLevel < 2) {
-                sender.sendMessage(getConfigStringColored("no_permission_message"));
-                return true;
-            }
             OfflinePlayer target = getServer().getOfflinePlayer(args[1]);
             try {
 
@@ -151,14 +147,9 @@ public class FlyCredits extends JavaPlugin implements Listener {
                 sendNice(sender, "Bitte Zeitformat einhalten, z.B.: " + TIME_COLOR + "12h50m20s" + MESSAGE_COLOR + ".");
             }
         } else if (args.length > 0 && subcommand.equals("check")) {
-            if (permLevel < 1) {
-                sender.sendMessage(getConfigStringColored("no_permission_message"));
-                return true;
-            }
             OfflinePlayer target;
             if (args.length > 1) {
                 target = getServer().getOfflinePlayer(args[1]);
-
             } else if (sender instanceof Player){
                 target = (Player) sender;
             } else {
@@ -175,10 +166,6 @@ public class FlyCredits extends JavaPlugin implements Listener {
             }
 
         } else if (args.length > 0 && args[0].toLowerCase().equals("checkall")) {
-            if (permLevel < 2) {
-                sender.sendMessage(getConfigStringColored("no_permission_message"));
-                return true;
-            }
             for (Map.Entry<UUID, HashMap<String, Integer>> uuidFlyInformationEntry : watchedPlayers.entrySet()) {
                 sender.sendMessage("");
                 OfflinePlayer target = getServer().getOfflinePlayer(uuidFlyInformationEntry.getKey());
@@ -195,18 +182,24 @@ public class FlyCredits extends JavaPlugin implements Listener {
         return true;
     }
 
-
     @EventHandler
-    public void onPlayerChangedWorldEvent(PlayerChangedWorldEvent e) {
+    public void onPlayerToggleFlightEvent(PlayerToggleFlightEvent e){
         Player p = e.getPlayer();
-        if (watchedPlayers.containsKey(p.getUniqueId())) {
-            if (!watchedPlayers.get(p.getUniqueId()).containsKey(p.getWorld().getName().toLowerCase()) || (watchedPlayers.get(p.getUniqueId()).containsKey(p.getWorld().getName().toLowerCase()) && watchedPlayers.get(p.getUniqueId()).get(p.getWorld().getName().toLowerCase()) <= 0)) {
-                getServer().dispatchCommand(getServer().getConsoleSender(), "fly " + p.getName() + " disable");
-            }
+        if (e.isFlying() && watchedPlayers.containsKey(p.getUniqueId()) && watchedPlayers.get(p.getUniqueId()).containsKey(p.getWorld().getName()) && !activePlayers.contains(p.getUniqueId())){
+            activePlayers.add(p.getUniqueId());
         }
     }
 
     @EventHandler
+    public void onPlayerChangedWorldEvent(PlayerChangedWorldEvent e) {
+        Player p = e.getPlayer();
+        if (watchedPlayers.containsKey(p.getUniqueId()) && !perms.has(p, "flycredits.bypass")){
+            p.setAllowFlight(false);
+            if (activePlayers.contains(p.getUniqueId())) activePlayers.remove(p.getUniqueId());
+        }
+    }
+
+    /*@EventHandler
     public void onPlayerJoinEvent(PlayerJoinEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
         for (UUID toWatch : watchedPlayers.keySet()) {
@@ -222,64 +215,68 @@ public class FlyCredits extends JavaPlugin implements Listener {
             break;
 
         }
-    }
+    }*/
 
     @EventHandler
     public void onPlayerQuitEvent(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
-        System.out.println(uuid);
-        if (playerTaskMap.containsKey(uuid)) {
+
+        if (activePlayers.contains(uuid)) activePlayers.remove(uuid);
+        /*if (playerTaskMap.containsKey(uuid)) {
             for (Integer id : playerTaskMap.get(uuid).values()) {
                 Bukkit.getScheduler().cancelTask(id);
             }
-        }
+        }*/
 
     }
 
-    public void startTimer(UUID uuid, String world) {
-        Player p = getServer().getPlayer(uuid);
-        int id = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, () -> {
+    public int startTimer() {
+        //Player p = getServer().getPlayer(uuid);
+        return Bukkit.getScheduler().scheduleSyncRepeatingTask(this, () -> {
             try {
-                String pWorld = p.getWorld().getName().toLowerCase();
+                ArrayList<UUID> _activePlayers = new ArrayList<>(activePlayers);
+                for (UUID activeUUID : activePlayers) {
+                    Player currentPlayer = getServer().getPlayer(activeUUID);
+                    String currentWorld = currentPlayer.getWorld().getName().toLowerCase();
 
-                if (p.isFlying() && pWorld.equals(world)) {
-                    //Player is indeed flying in a watched world
-                    //removing a second every 20 ticks
-                    watchedPlayers.get(uuid).put(pWorld, watchedPlayers.get(uuid).get(pWorld) - 1);
+                    if (currentPlayer.isFlying() && watchedPlayers.get(activeUUID).containsKey(currentWorld)) {
+                        //Player is indeed flying in a watched world
+                        //removing a second every 20 ticks
+                        watchedPlayers.get(activeUUID).put(currentWorld, watchedPlayers.get(activeUUID).get(currentWorld) - 1);
 
-                    if (watchedPlayers.get(uuid).get(pWorld) <= 0) {
-                        //Player has no more flytime left, so:
-                        watchedPlayers.get(uuid).put(world, 0);
-                        perms.playerRemove(world, getServer().getOfflinePlayer(uuid), "essentials.fly"); //removing permissions
-                        p.setFlying(false); //disabling flight
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "fly " + p.getName() + " disable"); //disabling /fly
-                        sendNice(p, "Flugzeit abgelaufen!");
-                        watchedPlayers.get(uuid).remove(world); //removing the world from watched worlds for this player
-                        if (watchedPlayers.get(p.getUniqueId()).isEmpty()) {
-                            watchedPlayers.remove(p.getUniqueId()); //removing player from watchlist if he's being watched in no more worlds
+                        if (watchedPlayers.get(activeUUID).get(currentWorld) <= 0) {
+                            //Player has no more flytime left, so:
+                            watchedPlayers.get(activeUUID).put(currentWorld, 0);
+                            perms.playerRemove(currentWorld, getServer().getOfflinePlayer(activeUUID), "essentials.fly"); //removing permissions
+                            currentPlayer.setFlying(false); //disabling flight
+                            currentPlayer.setAllowFlight(false);
+                            sendNice(currentPlayer, "Flugzeit abgelaufen!");
+                            watchedPlayers.get(activeUUID).remove(currentWorld); //removing the world from watched worlds for this player
+                            if (watchedPlayers.get(activeUUID).isEmpty()) {
+                                watchedPlayers.remove(activeUUID); //removing player from watchlist if he's being watched in no more worlds
+                            }
+
+                            try { //saving to db
+                                PreparedStatement stmt = connection.prepareStatement("delete from FlyCredits where UUID=? and world=?");
+                                stmt.setString(1, activeUUID.toString());
+                                stmt.setString(2, currentWorld);
+                                stmt.execute();
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+
+                            //removing player from activePlayers
+                            _activePlayers.remove(activeUUID);
                         }
-
-                        try { //saving to db
-                            PreparedStatement stmt = connection.prepareStatement("delete from FlyCredits where UUID=? and world=?");
-                            stmt.setString(1, p.getUniqueId().toString());
-                            stmt.setString(2, world);
-                            stmt.execute();
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-
-                        //cancelling this task
-                        Bukkit.getScheduler().cancelTask(playerTaskMap.get(uuid).get(world));
                     }
                 }
+
+                activePlayers = _activePlayers;
 
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }, 40, 20);
-        HashMap<String, Integer> hm = new HashMap<>();
-        hm.put(world, id);
-        playerTaskMap.put(uuid, hm);
     }
 
     public void addTime(OfflinePlayer p, String world, int sec) throws NullPointerException {
@@ -304,10 +301,6 @@ public class FlyCredits extends JavaPlugin implements Listener {
 
         //added time, so player will certainly some time left - giving permission
         perms.playerAdd(world, p, "essentials.fly");
-
-        if (p.isOnline()) {
-            startTimer(p.getUniqueId(), world);
-        }
     }
 
     public void removeTime(UUID uuid, String world, int sec) {
@@ -454,9 +447,18 @@ public class FlyCredits extends JavaPlugin implements Listener {
 
     }
 
-
     public String getConfigStringColored(String conf) {
         return ChatColor.translateAlternateColorCodes('&', config.getString(conf));
+    }
+
+    public boolean sufficientPermissions(String subcommand, CommandSender sender){
+        if (sender instanceof ConsoleCommandSender) return true;
+
+        Player p = (Player) sender;
+        if (checkCommands.contains(subcommand)) if (perms.has(p, "flycredits.check")) return true;
+        if (useCommands.contains(subcommand)) if (perms.has(p, "flycredits.use")) return true;
+
+        return false;
     }
 
 }
