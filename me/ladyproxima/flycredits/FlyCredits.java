@@ -148,8 +148,8 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor,
                 for (World world : getServer().getWorlds()) {
                     if (!world.getName().startsWith(toComplete)) continue;
                     toReturn.add(world.getName());
-                    return toReturn;
                 }
+                return toReturn;
         }
         return super.onTabComplete(sender, cmd, alias, args);
     }
