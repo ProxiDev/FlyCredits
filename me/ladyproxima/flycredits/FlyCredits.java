@@ -123,37 +123,6 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor,
 
     }
 
-    @Override
-    public List<String> onTabComplete(CommandSender sender, Command cmd, String alias, String[] args) {
-        if (!(sender instanceof Player) || !cmd.getName().equalsIgnoreCase("fc")) {
-            return super.onTabComplete(sender, cmd, alias, args);
-        }
-
-        ArrayList<String> toReturn = new ArrayList<>();
-        switch (args.length) {
-            case 1:
-                String toComplete = args[0].toLowerCase();
-                for (String subcommand : commands.keySet()) {
-                    if (!subcommand.startsWith(toComplete)) continue;
-                    if (perms.has((Player)sender, commands.get(subcommand).requiredPermissions())) toReturn.add(subcommand);
-                }
-                return toReturn;
-
-            case 4:
-                if (!(args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("add")) || !perms.has((Player)sender, "flycredits.use")){
-                    return super.onTabComplete(sender, cmd, alias, args);
-                }
-
-                toComplete = args[3].toLowerCase();
-                for (World world : getServer().getWorlds()) {
-                    if (!world.getName().startsWith(toComplete)) continue;
-                    toReturn.add(world.getName());
-                }
-                return toReturn;
-        }
-        return super.onTabComplete(sender, cmd, alias, args);
-    }
-
     @EventHandler
     public void onPlayerToggleFlightEvent(PlayerToggleFlightEvent e){
         Player p = e.getPlayer();
@@ -379,6 +348,37 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor,
 
         Player p = (Player) sender;
         return perms.has(p, commands.get(subcommand).requiredPermissions());
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command cmd, String alias, String[] args) {
+        if (!(sender instanceof Player) || !cmd.getName().equalsIgnoreCase("fc")) {
+            return super.onTabComplete(sender, cmd, alias, args);
+        }
+
+        ArrayList<String> toReturn = new ArrayList<>();
+        switch (args.length) {
+            case 1:
+                String toComplete = args[0].toLowerCase();
+                for (String subcommand : commands.keySet()) {
+                    if (!subcommand.startsWith(toComplete)) continue;
+                    if (perms.has((Player)sender, commands.get(subcommand).requiredPermissions())) toReturn.add(subcommand);
+                }
+                return toReturn;
+
+            case 4:
+                if (!(args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("add")) || !perms.has((Player)sender, "flycredits.use")){
+                    return super.onTabComplete(sender, cmd, alias, args);
+                }
+
+                toComplete = args[3].toLowerCase();
+                for (World world : getServer().getWorlds()) {
+                    if (!world.getName().startsWith(toComplete)) continue;
+                    toReturn.add(world.getName());
+                }
+                return toReturn;
+        }
+        return super.onTabComplete(sender, cmd, alias, args);
     }
 
 }
