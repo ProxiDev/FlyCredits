@@ -1,5 +1,6 @@
 package me.ladyproxima.flycredits;
 
+import me.ladyproxima.flycredits.commands.*;
 import net.milkbowl.vault.permission.Permission;
 
 import org.bukkit.Bukkit;
@@ -27,29 +28,28 @@ import java.util.logging.Logger;
 
 public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor {
 
+    public static HashMap<UUID, HashMap<String, Integer>> watchedPlayers = new HashMap<>();
+    public static ArrayList<UUID> activePlayers = new ArrayList<>();
 
-    HashMap<UUID, HashMap<String, Integer>> watchedPlayers = new HashMap<>();
-    ArrayList<UUID> activePlayers = new ArrayList<>();
+    static int timerID;
 
-    int timerID;
+    static HashMap<String, ICommand> commands = new HashMap<>();
 
-    ArrayList<String> checkCommands;
-    ArrayList<String> useCommands;
+    static FileConfiguration config;
+    public static Permission perms = null;
 
-    FileConfiguration config = getConfig();
-    Permission perms = null;
+    public static String NAME_COLOR = "";
+    public static String MESSAGE_COLOR = "";
+    public static String WORLD_COLOR = "";
+    public static String TIME_COLOR = "";
 
-    String NAME_COLOR = "";
-    String MESSAGE_COLOR = "";
-    String WORLD_COLOR = "";
-    String TIME_COLOR = "";
+    static Logger logger;
 
-    Logger logger;
-
-    Connection connection;
+    static Connection connection;
 
     @Override
     public void onEnable() {
+        config = getConfig();
         logger = getLogger();
         logger.info("Enabling FlyCredits...");
 
@@ -61,13 +61,10 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
         getServer().getPluginManager().registerEvents(this, this);
         getCommand("fc").setExecutor(this);
 
-        checkCommands = new ArrayList<>();
-        checkCommands.add("check");
-
-        useCommands = new ArrayList<>();
-        useCommands.add("add");
-        useCommands.add("remove");
-        useCommands.add("checkall");
+        commands.put("add", new AddCommand());
+        commands.put("remove", new RemoveCommand());
+        commands.put("check", new CheckCommand());
+        commands.put("checkall", new CheckallCommand());
 
         //Setting up the DB
         setupDB();
@@ -112,74 +109,18 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
             return true;
         }
 
-        if (args.length == 4 && subcommand.equals("add")) {
-            OfflinePlayer target = getServer().getOfflinePlayer(args[1]);
-
-            try {
-                Duration t = Duration.parse("pt" + args[2].replaceAll("-", ""));
-                int addSeconds = (int) t.getSeconds();
-                addTime(target, args[3].toLowerCase(), addSeconds);
-                sendNice(sender, "Spieler " + NAME_COLOR + target.getName() + MESSAGE_COLOR + " erfolgreich " +
-                        TIME_COLOR + secToTime(addSeconds) + MESSAGE_COLOR + " in Welt " + WORLD_COLOR + args[3].toLowerCase() + MESSAGE_COLOR +
-                        " hinzugefügt. Neue Flugzeit: " + TIME_COLOR + secToTime(watchedPlayers.get(target.getUniqueId()).get(args[3].toLowerCase())) + MESSAGE_COLOR + ".");
-
-            } catch (NullPointerException e) {
-                sendNice(sender, "Spieler war noch nie auf dem Server.");
-
-            } catch (Exception e) {
-                sendNice(sender, "Bitte Zeitformat einhalten, z.B.: " + TIME_COLOR + "12h50m20s" + MESSAGE_COLOR + ".");
-            }
-
-        } else if (args.length == 4 && subcommand.equals("remove")) {
-            OfflinePlayer target = getServer().getOfflinePlayer(args[1]);
-            try {
-
-                Duration t = Duration.parse("pt" + args[2].replaceAll("-", ""));
-                int addSeconds = (int) t.getSeconds();
-                removeTime(target.getUniqueId(), args[3].toLowerCase(), addSeconds);
-                int newTime = watchedPlayers.get(target.getUniqueId()).containsKey(args[3].toLowerCase()) ? watchedPlayers.get(target.getUniqueId()).get(args[3].toLowerCase()) : 0;
-                sendNice(sender, "Neue Flugzeit für Spieler " + NAME_COLOR + target.getName() + MESSAGE_COLOR + " in Welt " + WORLD_COLOR + args[3].toLowerCase() + MESSAGE_COLOR + ": " + TIME_COLOR + secToTime(newTime) + MESSAGE_COLOR + ".");
-
-            } catch (NullPointerException e) {
-                sendNice(sender, "Spieler war noch nie auf dem Server.");
-
-            } catch (Exception e) {
-                sendNice(sender, "Bitte Zeitformat einhalten, z.B.: " + TIME_COLOR + "12h50m20s" + MESSAGE_COLOR + ".");
-            }
-        } else if (args.length > 0 && subcommand.equals("check")) {
-            OfflinePlayer target;
-            if (args.length > 1) {
-                target = getServer().getOfflinePlayer(args[1]);
-            } else if (sender instanceof Player){
-                target = (Player) sender;
-            } else {
-                sendNice(sender, "Für diesen Befehl musst du ein Spieler sein.");
-                return true;
-            }
-
-            if (watchedPlayers.containsKey(target.getUniqueId())) {
-                for (Map.Entry<String, Integer> worldTimeLeftMap : watchedPlayers.get(target.getUniqueId()).entrySet()) {
-                    sendNice(sender, "Verbleibende Zeit in Welt " + WORLD_COLOR + worldTimeLeftMap.getKey() + MESSAGE_COLOR + ": " + TIME_COLOR + secToTime(worldTimeLeftMap.getValue()) + MESSAGE_COLOR + ".");
-                }
-            } else {
-                sendNice(sender, "Keine verbleibende Flugzeit mehr.");
-            }
-
-        } else if (args.length > 0 && args[0].toLowerCase().equals("checkall")) {
-            for (Map.Entry<UUID, HashMap<String, Integer>> uuidFlyInformationEntry : watchedPlayers.entrySet()) {
-                sender.sendMessage("");
-                OfflinePlayer target = getServer().getOfflinePlayer(uuidFlyInformationEntry.getKey());
-                sendNice(sender, NAME_COLOR + target.getName() + MESSAGE_COLOR + ":");
-                for (Map.Entry<String, Integer> stringFlyTimeEntry : uuidFlyInformationEntry.getValue().entrySet()) {
-                    sendNice(sender, "Verbleibende Zeit in Welt " + WORLD_COLOR + stringFlyTimeEntry.getKey() + MESSAGE_COLOR + ": " + TIME_COLOR + secToTime(stringFlyTimeEntry.getValue()) + MESSAGE_COLOR + ".");
-                }
-            }
-        } else {
-
-            return false;
-
+        switch (subcommand){
+            case "add":
+                return commands.get("add").executeCommand(sender, args);
+            case "remove":
+                return commands.get("remove").executeCommand(sender, args);
+            case "check":
+                return commands.get("check").executeCommand(sender, args);
+            case "checkall":
+                return commands.get("checkall").executeCommand(sender, args);
         }
-        return true;
+
+        return false;
     }
 
     @EventHandler
@@ -199,35 +140,11 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
         }
     }
 
-    /*@EventHandler
-    public void onPlayerJoinEvent(PlayerJoinEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-        for (UUID toWatch : watchedPlayers.keySet()) {
-
-            if (uuid.toString().equals(toWatch.toString())) {
-                System.out.println(true);
-                watchedPlayers.get(uuid).forEach((world, timeLeft) -> {
-                    perms.playerAdd(world, event.getPlayer().getName(), "essentials.fly");
-                    startTimer(uuid, world);
-
-                });
-            }
-            break;
-
-        }
-    }*/
-
     @EventHandler
     public void onPlayerQuitEvent(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
 
         if (activePlayers.contains(uuid)) activePlayers.remove(uuid);
-        /*if (playerTaskMap.containsKey(uuid)) {
-            for (Integer id : playerTaskMap.get(uuid).values()) {
-                Bukkit.getScheduler().cancelTask(id);
-            }
-        }*/
-
     }
 
     public int startTimer() {
@@ -246,24 +163,7 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
 
                         if (watchedPlayers.get(activeUUID).get(currentWorld) <= 0) {
                             //Player has no more flytime left, so:
-                            watchedPlayers.get(activeUUID).put(currentWorld, 0);
-                            perms.playerRemove(currentWorld, getServer().getOfflinePlayer(activeUUID), "essentials.fly"); //removing permissions
-                            currentPlayer.setFlying(false); //disabling flight
-                            currentPlayer.setAllowFlight(false);
-                            sendNice(currentPlayer, "Flugzeit abgelaufen!");
-                            watchedPlayers.get(activeUUID).remove(currentWorld); //removing the world from watched worlds for this player
-                            if (watchedPlayers.get(activeUUID).isEmpty()) {
-                                watchedPlayers.remove(activeUUID); //removing player from watchlist if he's being watched in no more worlds
-                            }
-
-                            try { //saving to db
-                                PreparedStatement stmt = connection.prepareStatement("delete from FlyCredits where UUID=? and world=?");
-                                stmt.setString(1, activeUUID.toString());
-                                stmt.setString(2, currentWorld);
-                                stmt.execute();
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
+                            noMoreTimeLeft(activeUUID, currentPlayer, currentWorld);
 
                             //removing player from activePlayers
                             _activePlayers.remove(activeUUID);
@@ -279,39 +179,28 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
         }, 40, 20);
     }
 
-    public void addTime(OfflinePlayer p, String world, int sec) throws NullPointerException {
-        UUID uuid = p.getUniqueId();
-        if (!watchedPlayers.containsKey(uuid)) {
-
-            HashMap<String, Integer> hm1 = new HashMap<>();
-
-            hm1.put(world, sec);
-            watchedPlayers.put(uuid, hm1);
-            insertDB(uuid.toString(), world, sec);
-        } else {
-            if (watchedPlayers.get(uuid).containsKey(world)) {
-                watchedPlayers.get(uuid).put(world, watchedPlayers.get(uuid).get(world) + sec);
-                updateDB(watchedPlayers.get(p.getUniqueId()).get(world), uuid.toString(), world);
-            } else {
-                watchedPlayers.get(uuid).put(world, sec);
-                insertDB(uuid.toString(), world, sec);
-            }
-
+    public void noMoreTimeLeft(UUID activeUUID, Player currentPlayer, String currentWorld){
+        watchedPlayers.get(activeUUID).put(currentWorld, 0);
+        perms.playerRemove(currentWorld, getServer().getOfflinePlayer(activeUUID), "essentials.fly"); //removing permissions
+        currentPlayer.setFlying(false); //disabling flight
+        currentPlayer.setAllowFlight(false);
+        sendNice(currentPlayer, "Flugzeit abgelaufen!");
+        watchedPlayers.get(activeUUID).remove(currentWorld); //removing the world from watched worlds for this player
+        if (watchedPlayers.get(activeUUID).isEmpty()) {
+            watchedPlayers.remove(activeUUID); //removing player from watchlist if he's being watched in no more worlds
         }
 
-        //added time, so player will certainly some time left - giving permission
-        perms.playerAdd(world, p, "essentials.fly");
+        try { //saving to db
+            PreparedStatement stmt = connection.prepareStatement("delete from FlyCredits where UUID=? and world=?");
+            stmt.setString(1, activeUUID.toString());
+            stmt.setString(2, currentWorld);
+            stmt.execute();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-    public void removeTime(UUID uuid, String world, int sec) {
-        int oldTime = watchedPlayers.get(uuid).get(world);
-        int newTime = (oldTime) - sec > 0 ? oldTime - sec : 0;
-
-        watchedPlayers.get(uuid).put(world, newTime);
-        updateDB(newTime, uuid.toString(), world);
-    }
-
-    public void updateDB(int timeLeft, String uuid, String world) {
+    public static void updateDB(int timeLeft, String uuid, String world) {
         try {
             PreparedStatement stmt = connection.prepareStatement("update FlyCredits set timeleft = ? where uuid = ? and world = ?;");
             stmt.setInt(1, timeLeft);
@@ -323,7 +212,7 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
         }
     }
 
-    public void insertDB(String uuid, String world, int timeLeft) {
+    public static void insertDB(String uuid, String world, int timeLeft) {
         try {
             PreparedStatement stmt = connection.prepareStatement("insert into FlyCredits (UUID, world, timeleft) values (?, ?, ?);");
             stmt.setString(1, uuid);
@@ -411,7 +300,7 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
         int timeLeft;
     }
 
-    public String secToTime(int seconds) {
+    public static String secToTime(int seconds) {
 
         final int MINUTES_IN_AN_HOUR = 60;
         final int SECONDS_IN_A_MINUTE = 60;
@@ -434,11 +323,11 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
         return sb.toString();
     }
 
-    public void sendNice(Player target, String message) {
+    public static void sendNice(Player target, String message) {
         target.sendMessage(getConfigStringColored("prefix") + getConfigStringColored("message_color") + message);
     }
 
-    public void sendNice(CommandSender target, String message) {
+    public static void sendNice(CommandSender target, String message) {
         if (target == Bukkit.getConsoleSender()) {
             logger.info(message.replaceAll("§.{1}", ""));
         } else {
@@ -447,18 +336,15 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
 
     }
 
-    public String getConfigStringColored(String conf) {
+    public static String getConfigStringColored(String conf) {
         return ChatColor.translateAlternateColorCodes('&', config.getString(conf));
     }
 
-    public boolean sufficientPermissions(String subcommand, CommandSender sender){
+    public static boolean sufficientPermissions(String subcommand, CommandSender sender){
         if (sender instanceof ConsoleCommandSender) return true;
 
         Player p = (Player) sender;
-        if (checkCommands.contains(subcommand)) if (perms.has(p, "flycredits.check")) return true;
-        if (useCommands.contains(subcommand)) if (perms.has(p, "flycredits.use")) return true;
-
-        return false;
+        return perms.has(p, commands.get(subcommand).requiredPermissions());
     }
 
 }
