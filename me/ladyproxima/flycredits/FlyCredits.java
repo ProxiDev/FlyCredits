@@ -6,10 +6,8 @@ import net.milkbowl.vault.permission.Permission;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
-import org.bukkit.command.ConsoleCommandSender;
+import org.bukkit.World;
+import org.bukkit.command.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -26,7 +24,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.logging.Logger;
 
-public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor {
+public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor, TabCompleter {
 
     public static HashMap<UUID, HashMap<String, Integer>> watchedPlayers = new HashMap<>();
     public static ArrayList<UUID> activePlayers = new ArrayList<>();
@@ -60,6 +58,7 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
 
         getServer().getPluginManager().registerEvents(this, this);
         getCommand("fc").setExecutor(this);
+        getCommand("fc").setTabCompleter(this);
 
         commands.put("add", new AddCommand());
         commands.put("remove", new RemoveCommand());
@@ -118,9 +117,41 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
                 return commands.get("check").executeCommand(sender, args);
             case "checkall":
                 return commands.get("checkall").executeCommand(sender, args);
+            default:
+                return false;
         }
 
-        return false;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command cmd, String alias, String[] args) {
+        if (!(sender instanceof Player) || !cmd.getName().equalsIgnoreCase("fc")) {
+            return super.onTabComplete(sender, cmd, alias, args);
+        }
+
+        ArrayList<String> toReturn = new ArrayList<>();
+        switch (args.length) {
+            case 1:
+                String toComplete = args[0].toLowerCase();
+                for (String subcommand : commands.keySet()) {
+                    if (!subcommand.startsWith(toComplete)) continue;
+                    if (perms.has((Player)sender, commands.get(subcommand).requiredPermissions())) toReturn.add(subcommand);
+                }
+                return toReturn;
+
+            case 4:
+                if (!(args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("add")) || !perms.has((Player)sender, "flycredits.use")){
+                    return super.onTabComplete(sender, cmd, alias, args);
+                }
+
+                toComplete = args[3].toLowerCase();
+                for (World world : getServer().getWorlds()) {
+                    if (!world.getName().startsWith(toComplete)) continue;
+                    toReturn.add(world.getName());
+                    return toReturn;
+                }
+        }
+        return super.onTabComplete(sender, cmd, alias, args);
     }
 
     @EventHandler
@@ -136,15 +167,14 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
         Player p = e.getPlayer();
         if (watchedPlayers.containsKey(p.getUniqueId()) && !perms.has(p, "flycredits.bypass")){
             p.setAllowFlight(false);
-            if (activePlayers.contains(p.getUniqueId())) activePlayers.remove(p.getUniqueId());
+            activePlayers.remove(p.getUniqueId());
         }
     }
 
     @EventHandler
     public void onPlayerQuitEvent(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
-
-        if (activePlayers.contains(uuid)) activePlayers.remove(uuid);
+        activePlayers.remove(uuid);
     }
 
     public int startTimer() {
@@ -179,12 +209,14 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
         }, 40, 20);
     }
 
-    public void noMoreTimeLeft(UUID activeUUID, Player currentPlayer, String currentWorld){
-        watchedPlayers.get(activeUUID).put(currentWorld, 0);
-        perms.playerRemove(currentWorld, getServer().getOfflinePlayer(activeUUID), "essentials.fly"); //removing permissions
-        currentPlayer.setFlying(false); //disabling flight
-        currentPlayer.setAllowFlight(false);
-        sendNice(currentPlayer, "Flugzeit abgelaufen!");
+    public static void noMoreTimeLeft(UUID activeUUID, OfflinePlayer currentPlayer, String currentWorld){
+        perms.playerRemove(currentWorld, Bukkit.getServer().getOfflinePlayer(activeUUID), "essentials.fly"); //removing permissions
+        if (currentPlayer.isOnline()){
+            Player p = (Player) currentPlayer;
+            p.setFlying(false); //disabling flight
+            p.setAllowFlight(false);
+            sendNice(p, "Flugzeit abgelaufen!");
+        }
         watchedPlayers.get(activeUUID).remove(currentWorld); //removing the world from watched worlds for this player
         if (watchedPlayers.get(activeUUID).isEmpty()) {
             watchedPlayers.remove(activeUUID); //removing player from watchlist if he's being watched in no more worlds
@@ -342,6 +374,8 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor 
 
     public static boolean sufficientPermissions(String subcommand, CommandSender sender){
         if (sender instanceof ConsoleCommandSender) return true;
+        if (subcommand.equals("")) return true;
+        if (!commands.containsKey(subcommand)) return true;
 
         Player p = (Player) sender;
         return perms.has(p, commands.get(subcommand).requiredPermissions());

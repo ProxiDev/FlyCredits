@@ -43,6 +43,11 @@ public class RemoveCommand implements ICommand {
         int oldTime = FlyCredits.watchedPlayers.get(uuid).get(world);
         int newTime = (oldTime) - sec > 0 ? oldTime - sec : 0;
 
+        if (newTime == 0){
+            FlyCredits.noMoreTimeLeft(uuid, Bukkit.getServer().getOfflinePlayer(uuid), world);
+            return;
+        }
+
         FlyCredits.watchedPlayers.get(uuid).put(world, newTime);
         FlyCredits.updateDB(newTime, uuid.toString(), world);
     }

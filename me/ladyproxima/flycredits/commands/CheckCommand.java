@@ -17,6 +17,10 @@ public class CheckCommand implements ICommand {
             FlyCredits.sendNice(sender, "Für diesen Befehl musst du ein Spieler sein.");
             return true;
         }
+        if (args.length == 2 && !FlyCredits.perms.has(sender, "flycredits.check.others") && !sender.getName().equalsIgnoreCase(args[1])){
+            sender.sendMessage(FlyCredits.getConfigStringColored("no_permission_message"));
+            return true;
+        }
 
         OfflinePlayer target;
         if (args.length > 1) {

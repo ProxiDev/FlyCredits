@@ -1,5 +1,5 @@
 name: FlyCredits
-version: 0.6
+version: 0.7
 author: LadyProxima
 main: me.ladyproxima.flycredits.FlyCredits
 api-version: 1.12.2
@@ -21,6 +21,9 @@ permissions:
     default: op
   flycredits.check:
     description: Allows fc check command.
+    default: op
+  flycredits.check.others:
+    description: Allows to check other players
     default: op
   flycredits.bypass:
     description: Allows bypassing of flight-disable on world change.
