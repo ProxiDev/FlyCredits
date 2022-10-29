@@ -147,7 +147,6 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor,
     }
 
     public int startTimer() {
-        //Player p = getServer().getPlayer(uuid);
         return Bukkit.getScheduler().scheduleSyncRepeatingTask(this, () -> {
             try {
                 ArrayList<UUID> _activePlayers = new ArrayList<>(activePlayers);
@@ -186,9 +185,11 @@ public class FlyCredits extends JavaPlugin implements Listener, CommandExecutor,
             p.setAllowFlight(false);
             sendNice(p, "Flugzeit abgelaufen!");
         }
-        watchedPlayers.get(activeUUID).remove(currentWorld); //removing the world from watched worlds for this player
+        //removing the world from watched worlds for this player
+        watchedPlayers.get(activeUUID).remove(currentWorld); 
         if (watchedPlayers.get(activeUUID).isEmpty()) {
-            watchedPlayers.remove(activeUUID); //removing player from watchlist if he's being watched in no more worlds
+            //removing player from watchlist if he's being watched in no more worlds
+            watchedPlayers.remove(activeUUID); 
         }
 
         try { //saving to db
