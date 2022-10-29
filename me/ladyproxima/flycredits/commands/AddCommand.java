@@ -23,7 +23,7 @@ public class AddCommand implements ICommand {
 
         try {
 
-            String time = "pt" + args[2].replaceAll("-", "");
+            String time = "pt" + args[2].replaceAll("-", "", -1);
             Duration t = Duration.parse(time);
             int addSeconds = (int) t.getSeconds();
             String world = args[3].toLowerCase();
